@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # User Service: Managing authentication and user profiles
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: sjsu-user-service
+    ports:
+      - "8001:8000"  # Host:Container
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=True
+    volumes:
+      - ./services/user-service/app:/app/app  # Hot reload for development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rideshare-network
+
+  # PostgreSQL Database: Primary data store
+  postgres:
+    image: postgres:15-alpine
+    container_name: sjsu-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rideshare
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rideshare-network
+
+  # Redis: Caching and real-time backend
+  redis:
+    image: redis:7-alpine
+    container_name: sjsu-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rideshare-network
+
+networks:
+  rideshare-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
