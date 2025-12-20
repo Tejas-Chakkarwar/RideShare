@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # Service Info
     SERVICE_NAME: str = "user-service"
     DEBUG: bool = False
+    LOG_LEVEL: str = "INFO"
     
     # Database Configuration
     DATABASE_URL: str

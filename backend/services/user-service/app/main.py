@@ -8,7 +8,7 @@ from app.api.routes import health
 # 1. Setup Logging
 # Logging is crucial for debugging in production
 logging.basicConfig(
-    level=logging.INFO,
+    level=settings.LOG_LEVEL,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -31,6 +31,13 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE)
     allow_headers=["*"],  # Allow all headers (Authorization, etc.)
 )
+
+# 4. Middleware & Error Handlers
+from app.middleware.logging_middleware import logging_middleware
+from app.middleware.error_handler import global_exception_handler
+
+app.middleware("http")(logging_middleware)
+app.add_exception_handler(Exception, global_exception_handler)
 
 # 4. Include Routers
 # We organize routes into separate modules
