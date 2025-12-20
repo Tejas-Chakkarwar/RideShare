@@ -1,29 +1,30 @@
 version: '3.8'
 
 services:
-  # User Service: Managing authentication and user profiles
+  # User Service
   user-service:
     build:
       context: ./services/user-service
       dockerfile: Dockerfile
     container_name: sjsu-user-service
     ports:
-      - "8001:8000"  # Host:Container
+      - "8001:8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=True
     volumes:
-      - ./services/user-service/app:/app/app  # Hot reload for development
+      - ./services/user-service/app:/app/app  # Hot reload
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - rideshare-network
-
-  # PostgreSQL Database: Primary data store
+  
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: sjsu-postgres
@@ -37,25 +38,44 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - rideshare-network
-
-  # Redis: Caching and real-time backend
+  
+  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: sjsu-redis
     ports:
-      - "6380:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    networks:
+      - rideshare-network
+  
+  # pgAdmin (Optional - for database visualization)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: sjsu-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@sjsu.edu
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    restart: unless-stopped
     networks:
       - rideshare-network
 
@@ -65,4 +85,8 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
