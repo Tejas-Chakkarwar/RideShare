@@ -54,3 +54,20 @@ async def read_users_me(
     Get current user.
     """
     return current_user
+
+@router.get("/{user_id}", response_model=UserResponse)
+async def get_user_by_id(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Get user by ID (for inter-service communication).
+    """
+    query = select(User).where(User.id == user_id)
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user
