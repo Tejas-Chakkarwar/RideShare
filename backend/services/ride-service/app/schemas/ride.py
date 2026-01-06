@@ -7,8 +7,8 @@ from decimal import Decimal
 class LocationSchema(BaseModel):
     """Schema for location with address and coordinates"""
     address: str = Field(..., min_length=5, max_length=500)
-    lat: float = Field(..., ge=-90, le=90, description="Latitude")
-    lng: float = Field(..., ge=-180, le=180, description="Longitude")
+    lat: Optional[float] = Field(None, ge=-90, le=90, description="Latitude")
+    lng: Optional[float] = Field(None, ge=-180, le=180, description="Longitude")
 
 class VehicleSchema(BaseModel):
     """Schema for vehicle information"""
@@ -66,13 +66,37 @@ class RideUpdate(BaseModel):
     preferences: Optional[Dict[str, Any]] = None
     notes: Optional[str] = Field(None, max_length=1000)
 
-class RideResponse(RideBase):
-    """Schema for ride API responses"""
+class RideResponse(BaseModel):
+    """Schema for ride API responses - matches actual database model"""
     id: UUID
-    driver_id: UUID
+    driver_id: int  # Changed from UUID to int to match user-service
+    
+    # Flat location fields (not nested objects)
+    origin_address: str
+    origin_lat: float
+    origin_lng: float
+    destination_address: str
+    destination_lat: float
+    destination_lng: float
+    
+    # Timing and capacity
+    departure_time: datetime
+    available_seats: int
+    price_per_seat: Decimal
+    
+    # Flat vehicle fields
+    vehicle_make: str
+    vehicle_model: str
+    vehicle_year: int
+    vehicle_license_plate: str
+    vehicle_color: Optional[str] = None
+    
+    # Status and metadata
+    preferences: Optional[Dict[str, Any]] = None
     status: str
     is_recurring: bool
     recurring_schedule: Optional[Dict[str, Any]] = None
+    notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     

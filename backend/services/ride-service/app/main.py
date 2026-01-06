@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import engine, Base
 # Import routes
-from app.api.routes import health, rides
+from app.api.routes import health, rides, matching
 
 # Setup logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -49,6 +49,7 @@ app.add_middleware(
 # Include Routers
 app.include_router(health.router, tags=["Health"])
 app.include_router(rides.router, prefix=f"{settings.API_V1_PREFIX}/rides", tags=["Rides"])
+app.include_router(matching.router, prefix=settings.API_V1_PREFIX + "/matching", tags=["Matching"])
 
 if __name__ == "__main__":
     import uvicorn

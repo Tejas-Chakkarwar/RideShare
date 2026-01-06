@@ -20,7 +20,7 @@ async def create_ride(
     Create a new ride. Only verified drivers can post.
     """
     try:
-        return await ride_service.create_ride(ride_in, current_user_id, db)
+        return await ride_service.create_ride(ride_in, int(current_user_id), db)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -38,7 +38,7 @@ async def search_rides(
 
 @router.get("/{ride_id}", response_model=RideResponse)
 async def get_ride(
-    ride_id: str,
+    ride_id: UUID,
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -48,3 +48,19 @@ async def get_ride(
     if not ride:
         raise HTTPException(status_code=404, detail="Ride not found")
     return ride
+
+@router.get("/{ride_id}/preview-route")
+async def preview_route(
+    ride_id: UUID,
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """
+    Get route preview (distance, duration, polyline) for a ride.
+    """
+    try:
+        route = await ride_service.preview_route(ride_id, db)
+        if not route:
+            raise HTTPException(status_code=404, detail="Ride not found or route calculation failed")
+        return route
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

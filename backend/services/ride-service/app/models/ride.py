@@ -42,9 +42,8 @@ class Ride(Base):
     # So I will stick to that.
     
     driver_id = Column(
-        UUID(as_uuid=True),
+        Integer,
         nullable=False,
-        index=True,
         comment="Reference to user who is driving"
     )
     
@@ -59,7 +58,7 @@ class Ride(Base):
     destination_lng = Column(Float, nullable=False)
     
     # Ride details
-    departure_time = Column(DateTime(timezone=True), nullable=False, index=True)
+    departure_time = Column(DateTime(timezone=True), nullable=False)
     available_seats = Column(Integer, nullable=False)
     price_per_seat = Column(Numeric(10, 2), nullable=False, default=0.00)
     
@@ -74,7 +73,7 @@ class Ride(Base):
     preferences = Column(JSON, nullable=True, default=dict)
     
     # Status
-    status = Column(Enum(RideStatus), nullable=False, default=RideStatus.ACTIVE, index=True)
+    status = Column(Enum(RideStatus), nullable=False, default=RideStatus.ACTIVE)
     
     # Recurring
     is_recurring = Column(Boolean, default=False, nullable=False)
@@ -84,7 +83,7 @@ class Ride(Base):
     notes = Column(Text, nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     # Indexes (Composite indexes for search)

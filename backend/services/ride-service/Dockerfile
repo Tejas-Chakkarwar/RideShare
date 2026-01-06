@@ -11,13 +11,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
-COPY requirements.txt .
+COPY services/ride-service/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy shared code
+COPY shared /app/shared
+
 # Copy application code
-COPY . .
+COPY services/ride-service .
 
 # Expose port 8000 (internal)
 EXPOSE 8000

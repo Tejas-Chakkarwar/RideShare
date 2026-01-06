@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     
     # Database Configuration
     DATABASE_URL: str
+    REDIS_URL: str = "redis://redis:6379/0"
     
     # Inter-service Communication
     USER_SERVICE_URL: str = "http://user-service:8000"
@@ -19,7 +20,15 @@ class Settings(BaseSettings):
     # API Configuration
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_NAME: str = "SJSU RideShare Ride Service"
+
+    # Google Maps Configuration
+    GOOGLE_MAPS_API_KEY: str = ""
+    GOOGLE_MAPS_ENABLED: bool = True
+
     
+    # Security
+    SECRET_KEY: str = "secret" # Should be overridden by env var
+
     # CORS
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
