@@ -4,8 +4,8 @@ services:
   # User Service
   user-service:
     build:
-      context: ./services/user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/user-service/Dockerfile
     container_name: sjsu-user-service
     ports:
       - "8001:8000"
@@ -15,6 +15,7 @@ services:
       - DEBUG=True
     volumes:
       - ./services/user-service:/app  # Hot reload for all files (app code + alembic)
+      - ./shared:/app/shared          # Hot reload shared code
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,8 +28,8 @@ services:
   # Ride Service
   ride-service:
     build:
-      context: ./services/ride-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ride-service/Dockerfile
     container_name: sjsu-ride-service
     ports:
       - "8002:8000"
@@ -36,8 +37,11 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
       - USER_SERVICE_URL=http://user-service:8000
       - DEBUG=True
+    env_file:
+      - ./services/ride-service/.env
     volumes:
       - ./services/ride-service:/app
+      - ./shared:/app/shared          # Hot reload shared code
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,6 +50,37 @@ services:
     restart: unless-stopped
     networks:
       - rideshare-network
+
+  # Booking Service
+  booking-service:
+    build:
+      context: .
+      dockerfile: services/booking-service/Dockerfile
+    container_name: sjsu-booking-service
+    ports:
+      - "8003:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
+      - RIDE_SERVICE_URL=http://ride-service:8000
+      - USER_SERVICE_URL=http://user-service:8000
+      - DEBUG=True
+    env_file:
+      - ./services/booking-service/.env
+    volumes:
+      - ./services/booking-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ride-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - rideshare-network
+
+
 
   # PostgreSQL Database
   postgres:
