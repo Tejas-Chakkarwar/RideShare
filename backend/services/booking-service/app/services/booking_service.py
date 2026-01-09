@@ -70,6 +70,41 @@ class BookingService:
                 await self.db.flush() # Get ID
                 await self.db.refresh(booking_record)
                 
+                # Notification Logic
+                try:
+                    from app.clients.notification_client import notification_client
+                    from app.clients.user_client import user_client
+                    
+                    # Fetch ride info
+                    ride_info = await self.db.execute(
+                        text("SELECT origin_address, destination_address, departure_time, driver_id FROM rides WHERE id = :ride_id"),
+                        {"ride_id": booking_in.ride_id}
+                    )
+                    r_info = ride_info.fetchone()
+                    
+                    if r_info:
+                        # Fetch names
+                        passenger_data = await user_client.get_user(user_id)
+                        driver_data = await user_client.get_user(r_info[3])
+                        
+                        passenger_name = f"{passenger_data.get('first_name', '')} {passenger_data.get('last_name', '')}".strip() or "Passenger"
+                        driver_name = f"{driver_data.get('first_name', '')} {driver_data.get('last_name', '')}".strip() or "Driver"
+
+                        await notification_client.send_booking_request(
+                            driver_id=r_info[3],
+                            booking_id=booking_record.id,
+                            passenger_name=passenger_name,
+                            driver_name=driver_name,
+                            origin=r_info[0],
+                            destination=r_info[1],
+                            departure_time=str(r_info[2]),
+                            seats_booked=booking_in.seats_booked,
+                            total_amount=total_cost,
+                            passenger_notes=booking_in.passenger_notes
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to send booking notification: {e}")
+                
                 return booking_record
                 
         except HTTPException as he:
@@ -92,16 +127,48 @@ class BookingService:
             
         # Verify driver owns the ride? (Using SQL for speed/independence)
         ride_res = await self.db.execute(
-            text("SELECT driver_id FROM rides WHERE id = :ride_id"),
+            text("SELECT driver_id, origin_address, destination_address, departure_time FROM rides WHERE id = :ride_id"),
             {"ride_id": booking.ride_id}
         )
-        ride_driver = ride_res.scalar_one_or_none()
-        if not ride_driver or str(ride_driver) != str(driver_id):
+        ride_row = ride_res.fetchone()
+        
+        if not ride_row:
+             raise HTTPException(status_code=404, detail="Ride not found")
+             
+        ride_driver = ride_row[0]
+        if str(ride_driver) != str(driver_id):
              raise HTTPException(status_code=403, detail="Not authorized to approve this booking")
 
         booking.status = BookingStatus.APPROVED
         await self.db.commit()
         await self.db.refresh(booking)
+        
+        # Send Notification
+        try:
+            from app.clients.notification_client import notification_client
+            from app.clients.user_client import user_client
+            
+            # Fetch names
+            passenger_data = await user_client.get_user(booking.passenger_id)
+            driver_data = await user_client.get_user(driver_id)
+            
+            passenger_name = f"{passenger_data.get('first_name', '')} {passenger_data.get('last_name', '')}".strip() or "Passenger"
+            driver_name = f"{driver_data.get('first_name', '')} {driver_data.get('last_name', '')}".strip() or "Driver"
+
+            await notification_client.send_booking_approved(
+                passenger_id=booking.passenger_id,
+                booking_id=booking.id,
+                passenger_name=passenger_name,
+                driver_name=driver_name,
+                origin=ride_row[1],
+                destination=ride_row[2],
+                departure_time=str(ride_row[3]),
+                seats_booked=booking.seats_booked,
+                total_amount=float(booking.total_amount)
+            )
+        except Exception as e:
+            logger.error(f"Failed to send approval notification: {e}")
+
         return booking
 
     async def reject_booking(self, booking_id: UUID, driver_id: UUID):
@@ -111,11 +178,16 @@ class BookingService:
                  raise HTTPException(status_code=400, detail="Booking is not pending")
 
             ride_res = await self.db.execute(
-                text("SELECT driver_id FROM rides WHERE id = :ride_id"),
+                text("SELECT driver_id, origin_address, destination_address, departure_time FROM rides WHERE id = :ride_id"),
                 {"ride_id": booking.ride_id}
             )
-            ride_driver = ride_res.scalar_one_or_none()
-            if not ride_driver or str(ride_driver) != str(driver_id):
+            ride_row = ride_res.fetchone()
+            
+            if not ride_row:
+                 raise HTTPException(status_code=404, detail="Ride not found")
+                 
+            ride_driver = ride_row[0]
+            if str(ride_driver) != str(driver_id):
                  raise HTTPException(status_code=403, detail="Not authorized to reject this booking")
             
             # Release seats
@@ -127,4 +199,26 @@ class BookingService:
             booking.status = BookingStatus.REJECTED
             await self.db.commit()
             await self.db.refresh(booking)
+            
+            # Send Notification
+            try:
+                from app.clients.notification_client import notification_client
+                from app.clients.user_client import user_client
+                
+                # Fetch passenger name
+                passenger_data = await user_client.get_user(booking.passenger_id)
+                passenger_name = f"{passenger_data.get('first_name', '')} {passenger_data.get('last_name', '')}".strip() or "Passenger"
+
+                await notification_client.send_booking_rejected(
+                    passenger_id=booking.passenger_id,
+                    booking_id=booking.id,
+                    passenger_name=passenger_name,
+                    origin=ride_row[1],
+                    destination=ride_row[2],
+                    departure_time=str(ride_row[3]),
+                    seats_booked=booking.seats_booked
+                )
+            except Exception as e:
+                logger.error(f"Failed to send rejection notification: {e}")
+
             return booking

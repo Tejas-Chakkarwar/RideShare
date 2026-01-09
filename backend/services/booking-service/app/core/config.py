@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
 
+    # Email (SendGrid for MVP, AWS SES for production)
+    SENDGRID_API_KEY: str = ""
+    SENDGRID_FROM_EMAIL: str = "noreply@sjsurideshare.com"
+    SENDGRID_FROM_NAME: str = "SJSU RideShare"
+
+    # App URL for email links
+    APP_URL: str = "http://localhost:3000"
+
     class Config:
         env_file = ".env"
 

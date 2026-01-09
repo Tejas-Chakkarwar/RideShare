@@ -66,8 +66,31 @@ async def get_user_by_id(
     query = select(User).where(User.id == user_id)
     result = await db.execute(query)
     user = result.scalar_one_or_none()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return user
+
+
+@router.post("/fcm-token", status_code=status.HTTP_200_OK)
+async def update_fcm_token(
+    fcm_token: str = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Update FCM token for push notifications.
+    Mobile app should call this on:
+    - Login
+    - App startup
+    - Token refresh
+    """
+    current_user.fcm_token = fcm_token
+    db.add(current_user)
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": "FCM token updated successfully"
+    }

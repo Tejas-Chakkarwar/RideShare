@@ -15,7 +15,10 @@ class User(Base):
     # Profile Info
     full_name = Column(String, index=True)
     phone_number = Column(String, unique=True, index=True)
-    
+
+    # Push Notifications (Section 7)
+    fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token
+
     # Status
     is_active = Column(Boolean(), default=True)
     is_superuser = Column(Boolean(), default=False)
