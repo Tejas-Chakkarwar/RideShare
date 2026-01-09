@@ -13,6 +13,8 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=True
+    env_file:
+      - ./services/user-service/.env
     volumes:
       - ./services/user-service:/app  # Hot reload for all files (app code + alembic)
       - ./shared:/app/shared          # Hot reload shared code

@@ -65,3 +65,4 @@ pgadmin_data/
 .coverage
 htmlcov/
 backend/services/notification-service/app/firebase_credentials.json
+firebase_credentials.json

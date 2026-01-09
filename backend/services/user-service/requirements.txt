@@ -19,3 +19,5 @@ python-jose[cryptography]==3.3.0
 python-multipart>=0.0.9
 email-validator>=2.1.0
 googlemaps==4.10.0
+stripe==8.1.0
+slowapi
