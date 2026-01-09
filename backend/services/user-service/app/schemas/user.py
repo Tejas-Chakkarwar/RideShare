@@ -28,11 +28,23 @@ class UserCreate(UserBase):
 # Properties to receive via API on update
 class UserUpdate(UserBase):
     password: Optional[str] = None
+    car_model: Optional[str] = None
+    car_color: Optional[str] = None
+    license_plate: Optional[str] = None
+
+class UserPasswordUpdate(BaseModel):
+    old_password: str
+    new_password: str
+
+from uuid import UUID
 
 # Properties to return to client (Never return password!)
 class UserResponse(UserBase):
-    id: int
+    id: UUID
     is_active: bool
+    car_model: Optional[str] = None
+    car_color: Optional[str] = None
+    license_plate: Optional[str] = None
     
     class Config:
         # Pydantic's 'orm_mode' allows it to read data from SQLAlchemy models

@@ -23,7 +23,7 @@ class RideService:
             enabled=settings.GOOGLE_MAPS_ENABLED
         )
 
-    async def create_ride(self, ride_data: RideCreate, driver_id: int, db: AsyncSession) -> Ride:
+    async def create_ride(self, ride_data: RideCreate, driver_id: UUID, db: AsyncSession) -> Ride:
         # 1. Verify Driver
         driver = await user_client.get_user(driver_id)
         if not driver:
@@ -95,12 +95,12 @@ class RideService:
         """Alias for get_ride"""
         return await self.get_ride(ride_id, db)
 
-    async def get_rides_by_driver(self, driver_id: UUID, db: AsyncSession, status: Optional[str] = None) -> List[Ride]:
+    async def get_rides_by_driver(self, driver_id: UUID, db: AsyncSession, status: Optional[str] = None, skip: int = 0, limit: int = 20) -> List[Ride]:
         """Get rides for a specific driver"""
         query = select(Ride).where(Ride.driver_id == driver_id)
         if status:
             query = query.where(Ride.status == status)
-        query = query.order_by(Ride.departure_time.desc())
+        query = query.order_by(Ride.departure_time.desc()).offset(skip).limit(limit)
         result = await db.execute(query)
         return result.scalars().all()
 
@@ -113,9 +113,40 @@ class RideService:
         if ride.driver_id != driver_id:
             raise ValueError("Not authorized to update this ride")
 
-        # Update fields... (Simplified for now)
-        # Note: If updating address, might need re-geocoding. 
-        # Skipping logic for brevity, assuming client sends coords if updating location.
+        # Update available fields
+        if ride_data.available_seats is not None:
+             ride.available_seats = ride_data.available_seats
+        if ride_data.price_per_seat is not None:
+             ride.price_per_seat = ride_data.price_per_seat
+        if ride_data.preferences is not None:
+             ride.preferences = ride_data.preferences
+        if ride_data.notes is not None:
+             ride.notes = ride_data.notes
+        if ride_data.departure_time is not None:
+             # Validate time in future? Validation logic is in schema usually
+             ride.departure_time = ride_data.departure_time
+             
+        # Update vehicle if provided
+        if ride_data.vehicle:
+             ride.vehicle_make = ride_data.vehicle.make
+             ride.vehicle_model = ride_data.vehicle.model
+             ride.vehicle_year = ride_data.vehicle.year
+             ride.vehicle_license_plate = ride_data.vehicle.license_plate
+             ride.vehicle_color = ride_data.vehicle.color
+
+        # Location updates - skipping geocoding strictly for now as per comment
+        # but updating DB fields if provided
+        if ride_data.origin:
+             ride.origin_address = ride_data.origin.address
+             if ride_data.origin.lat and ride_data.origin.lng:
+                 ride.origin_lat = ride_data.origin.lat
+                 ride.origin_lng = ride_data.origin.lng
+
+        if ride_data.destination:
+             ride.destination_address = ride_data.destination.address
+             if ride_data.destination.lat and ride_data.destination.lng:
+                 ride.destination_lat = ride_data.destination.lat
+                 ride.destination_lng = ride_data.destination.lng
         
         await db.commit()
         await db.refresh(ride)
@@ -140,6 +171,19 @@ class RideService:
             Ride.departure_time >= datetime.now(timezone.utc)
         )
         
+        if params.min_price is not None:
+             query = query.where(Ride.price_per_seat >= params.min_price)
+        if params.max_price is not None:
+             query = query.where(Ride.price_per_seat <= params.max_price)
+             
+        # Sorting
+        if params.sort_by == "price_per_seat":
+             query = query.order_by(Ride.price_per_seat.asc())
+        elif params.sort_by == "created_at":
+             query = query.order_by(Ride.created_at.desc())
+        else: # Default departure_time
+             query = query.order_by(Ride.departure_time.asc())
+        
         result = await db.execute(query)
         rides = result.scalars().all()
         
@@ -157,12 +201,12 @@ class RideService:
         
         return rides
         
-    async def get_available_rides(self, db: AsyncSession, limit: int = 20) -> List[Ride]:
+    async def get_available_rides(self, db: AsyncSession, skip: int = 0, limit: int = 20) -> List[Ride]:
         """Feed of recent rides"""
         query = select(Ride).where(
             Ride.status == RideStatus.ACTIVE,
             Ride.departure_time > datetime.now(timezone.utc)
-        ).order_by(Ride.created_at.desc()).limit(limit)
+        ).order_by(Ride.created_at.desc()).offset(skip).limit(limit)
         
         result = await db.execute(query)
         return result.scalars().all()
@@ -177,5 +221,50 @@ class RideService:
         destination = f"{ride.destination_lat},{ride.destination_lng}"
         
         return await self.maps_client.calculate_route(origin, destination)
+
+    async def start_ride(self, ride_id: UUID, driver_id: UUID, db: AsyncSession) -> Ride:
+        """Mark ride as in progress"""
+        ride = await self.get_ride(ride_id, db)
+        if not ride:
+             raise ValueError("Ride not found")
+        
+        if ride.driver_id != driver_id:
+            raise ValueError("Not authorized to start this ride")
+            
+        if ride.status != RideStatus.ACTIVE:
+             raise ValueError(f"Ride cannot be started from status {ride.status}")
+        
+        ride.status = RideStatus.IN_PROGRESS
+        await db.commit()
+        await db.refresh(ride)
+        return ride
+
+    async def complete_ride(self, ride_id: UUID, driver_id: UUID, db: AsyncSession) -> Ride:
+        """Mark ride as completed"""
+        ride = await self.get_ride(ride_id, db)
+        if not ride:
+             raise ValueError("Ride not found")
+
+        if ride.driver_id != driver_id:
+            raise ValueError("Not authorized to complete this ride")
+            
+        if ride.status != RideStatus.IN_PROGRESS:
+             raise ValueError(f"Ride cannot be completed from status {ride.status}")
+        
+        ride.status = RideStatus.COMPLETED
+        await db.commit()
+        await db.refresh(ride)
+        
+        # Trigger payment capture via Booking Service
+        try:
+            from app.clients.booking_client import booking_client
+            # Notify booking service that ride is complete so it can capture payments
+            await booking_client.notify_ride_completed(ride.id)
+            logger.info(f"Notified booking service of ride completion: {ride.id}")
+        except Exception as e:
+            # Don't fail ride completion if notification fails - payments can be captured manually
+            logger.error(f"Failed to notify booking service of ride completion: {e}")
+        
+        return ride
 
 ride_service = RideService()

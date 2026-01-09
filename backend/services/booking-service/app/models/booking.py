@@ -27,10 +27,24 @@ class Booking(Base):
     
     # Financials
     total_amount = Column(Numeric(10, 2), nullable=False, default=0.00)
+    platform_fee = Column(Numeric(10, 2), nullable=False, default=0.00)
+    driver_payout = Column(Numeric(10, 2), nullable=False, default=0.00)
+    
+    # Payment Tracking
+    stripe_payment_intent_id = Column(String(100), nullable=True, unique=True)
+    stripe_charge_id = Column(String(100), nullable=True)
+    stripe_refund_id = Column(String(100), nullable=True)
+    payment_method_id = Column(String(100), nullable=True)
+    payment_status = Column(
+        Enum('pending', 'authorized', 'succeeded', 'failed', 'refunded', name='payment_status_enum'),
+        nullable=False,
+        default='pending'
+    )
     
     # Locations (Snapshots)
     pickup_location = Column(JSON, nullable=False)  # {"lat": x, "lng": y, "address": "..."}
     dropoff_location = Column(JSON, nullable=False)
+    pickup_time = Column(DateTime(timezone=True), nullable=True) # For refund calculation
     
     # Communication
     passenger_notes = Column(Text, nullable=True)
@@ -54,6 +68,9 @@ class Booking(Base):
             "seats_booked": self.seats_booked,
             "status": self.status.value,
             "total_amount": float(self.total_amount) if self.total_amount else 0.0,
+            "platform_fee": float(self.platform_fee) if self.platform_fee else 0.0,
+            "driver_payout": float(self.driver_payout) if self.driver_payout else 0.0,
+            "payment_status": self.payment_status,
             "pickup_location": self.pickup_location,
             "dropoff_location": self.dropoff_location,
             "passenger_notes": self.passenger_notes,

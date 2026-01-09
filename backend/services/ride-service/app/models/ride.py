@@ -12,6 +12,7 @@ class RideStatus(str, enum.Enum):
     """Enum for ride status"""
     ACTIVE = "active"
     FULL = "full"
+    IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
@@ -42,8 +43,9 @@ class Ride(Base):
     # So I will stick to that.
     
     driver_id = Column(
-        Integer,
+        UUID(as_uuid=True),
         nullable=False,
+        index=True,
         comment="Reference to user who is driving"
     )
     

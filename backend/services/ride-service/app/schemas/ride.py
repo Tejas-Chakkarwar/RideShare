@@ -69,7 +69,7 @@ class RideUpdate(BaseModel):
 class RideResponse(BaseModel):
     """Schema for ride API responses - matches actual database model"""
     id: UUID
-    driver_id: int  # Changed from UUID to int to match user-service
+    driver_id: UUID
     
     # Flat location fields (not nested objects)
     origin_address: str
@@ -112,3 +112,6 @@ class RideSearchParams(BaseModel):
     departure_date: Optional[str] = None # ISO format date
     min_seats: int = Field(1, ge=1, le=7)
     proximity_km: float = Field(5.0, ge=0.1, le=50.0)
+    min_price: Optional[Decimal] = Field(None, ge=0)
+    max_price: Optional[Decimal] = Field(None, ge=0)
+    sort_by: Optional[str] = Field("departure_time", pattern="^(departure_time|price_per_seat|created_at)$")

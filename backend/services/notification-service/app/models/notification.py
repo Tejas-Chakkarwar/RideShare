@@ -24,6 +24,7 @@ class NotificationType(str, enum.Enum):
     SYSTEM_ANNOUNCEMENT = "system_announcement"
     DRIVER_APPROACHING = "driver_approaching"
     DRIVER_ARRIVED = "driver_arrived"
+    PAYMENT_CONFIRMATION = "payment_confirmation"
 
 
 class NotificationChannel(str, enum.Enum):

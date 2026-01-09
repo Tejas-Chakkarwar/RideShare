@@ -28,7 +28,7 @@ class BookingService:
                 # 'rides' table is in the public schema of the shared DB.
                 # FOR UPDATE prevents other transactions from reading/writing this row until we commit.
                 result = await self.db.execute(
-                    text("SELECT available_seats, price_per_seat FROM rides WHERE id = :ride_id FOR UPDATE"),
+                    text("SELECT available_seats, price_per_seat, departure_time FROM rides WHERE id = :ride_id FOR UPDATE"),
                     {"ride_id": booking_in.ride_id}
                 )
                 ride_row = result.fetchone()
@@ -38,6 +38,7 @@ class BookingService:
                 
                 available_seats = ride_row[0]
                 price = ride_row[1]
+                departure_time = ride_row[2]
                 
                 # 3. Validation
                 if available_seats < booking_in.seats_booked:
@@ -64,7 +65,8 @@ class BookingService:
                     total_amount=total_cost,
                     pickup_location=booking_in.pickup_location.model_dump(),
                     dropoff_location=booking_in.dropoff_location.model_dump(),
-                    passenger_notes=booking_in.passenger_notes
+                    passenger_notes=booking_in.passenger_notes,
+                    pickup_time=departure_time
                 )
                 self.db.add(booking_record)
                 await self.db.flush() # Get ID
@@ -222,3 +224,117 @@ class BookingService:
                 logger.error(f"Failed to send rejection notification: {e}")
 
             return booking
+
+    async def get_bookings_by_passenger(self, passenger_id: UUID, skip: int = 0, limit: int = 20) -> List[Booking]:
+        """Get all bookings for a passenger"""
+        query = select(Booking).where(Booking.passenger_id == passenger_id).order_by(Booking.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_driver_booking_requests(self, driver_id: UUID, skip: int = 0, limit: int = 20) -> List[Booking]:
+        """Get pending bookings for a driver's rides"""
+        # ... logic ...
+        rides_res = await self.db.execute(text("SELECT id FROM rides WHERE driver_id = :driver_id"), {"driver_id": driver_id})
+        ride_ids = [r[0] for r in rides_res.fetchall()]
+        
+        if not ride_ids:
+            return []
+            
+        # Using select with filters, offset, limit
+        stmt = select(Booking).where(Booking.ride_id.in_(ride_ids), Booking.status == BookingStatus.PENDING).order_by(Booking.created_at.desc()).offset(skip).limit(limit)
+        res = await self.db.execute(stmt)
+        return res.scalars().all()
+
+    async def cancel_booking(self, booking_id: UUID, passenger_id: UUID) -> Booking:
+        """Passenger cancels a booking"""
+        booking = await self.get_booking(booking_id)
+        if booking.passenger_id != passenger_id:
+             raise HTTPException(status_code=403, detail="Not authorized to cancel this booking")
+             
+        if booking.status in [BookingStatus.CANCELLED, BookingStatus.REJECTED]:
+             raise HTTPException(status_code=400, detail="Booking already cancelled/rejected")
+
+        # Check ride status to block cancellation if in progress
+        ride_res = await self.db.execute(text("SELECT status FROM rides WHERE id = :ride_id"), {"ride_id": booking.ride_id})
+        ride_status = ride_res.scalar_one_or_none()
+        
+        if ride_status == "in_progress":
+             raise HTTPException(status_code=400, detail="Cannot cancel booking while ride is in progress")
+             
+        # If approved, need to release seat? Yes.
+        # If pending, need to release seat? Our logic decremented seat ON CREATION, so YES.
+        
+        await self.db.execute(
+            text("UPDATE rides SET available_seats = available_seats + :seats WHERE id = :ride_id"),
+            {"seats": booking.seats_booked, "ride_id": booking.ride_id}
+        )
+        
+        booking.status = BookingStatus.CANCELLED
+        await self.db.commit()
+        await self.db.refresh(booking)
+        return booking
+
+    async def cancel_booking_by_driver(self, booking_id: UUID, driver_id: UUID) -> Booking:
+        """Driver cancels a booking (even after approval)"""
+        booking = await self.get_booking(booking_id)
+        
+        # Verify driver owns the ride
+        ride_res = await self.db.execute(
+            text("SELECT driver_id, origin_address, destination_address, departure_time FROM rides WHERE id = :ride_id"),
+            {"ride_id": booking.ride_id}
+        )
+        ride_row = ride_res.fetchone()
+        
+        if not ride_row or str(ride_row[0]) != str(driver_id):
+             raise HTTPException(status_code=403, detail="Not authorized to cancel this booking")
+
+        if booking.status in [BookingStatus.CANCELLED, BookingStatus.REJECTED]:
+             raise HTTPException(status_code=400, detail="Booking already cancelled/rejected")
+             
+        # Release seats
+        await self.db.execute(
+            text("UPDATE rides SET available_seats = available_seats + :seats WHERE id = :ride_id"),
+            {"seats": booking.seats_booked, "ride_id": booking.ride_id}
+        )
+        
+        # Trigger Refund if status was APPROVED (meaning paid)
+        if booking.status == BookingStatus.APPROVED and booking.stripe_payment_intent_id:
+            try:
+                from app.services.payment_service import payment_service
+                # Calculate refund (100% for driver cancellation)
+                refund_result = await payment_service.create_refund(
+                    booking=booking,
+                    refund_percentage=1.0,  # Full refund for driver cancellation
+                    reason="Driver cancelled the ride"
+                )
+                logger.info(f"Refund issued for booking {booking.id}: {refund_result}")
+            except Exception as refund_error:
+                logger.error(f"Refund failed for booking {booking.id}: {refund_error}")
+                # Don't fail the cancellation if refund fails - log for manual processing
+        
+        booking.status = BookingStatus.CANCELLED
+        await self.db.commit()
+        await self.db.refresh(booking)
+        
+        # Notify Passenger
+        try:
+            from app.clients.notification_client import notification_client
+            from app.clients.user_client import user_client
+            
+            # Fetch passenger name
+            passenger_data = await user_client.get_user(booking.passenger_id)
+            passenger_name = f"{passenger_data.get('first_name', '')} {passenger_data.get('last_name', '')}".strip() or "Passenger"
+
+            await notification_client.send_booking_rejected( # Reuse rejected template or create new
+                passenger_id=booking.passenger_id,
+                booking_id=booking.id,
+                passenger_name=passenger_name,
+                origin=ride_row[1],
+                destination=ride_row[2],
+                departure_time=str(ride_row[3]),
+                seats_booked=booking.seats_booked
+            )
+        except Exception as e:
+            logger.error(f"Failed to send cancellation notification: {e}")
+
+        return booking
