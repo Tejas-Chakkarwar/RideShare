@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.schemas.booking import BookingCreate, BookingResponse, BookingUpdateStatus
 from app.services.booking_service import BookingService
-from app.clients.user_client import UserServiceClient
+from app.clients.user_client import user_client
 from shared.utils.email_client import EmailClient
 from shared.utils.email_templates import (
     render_booking_created_passenger,
@@ -28,7 +28,7 @@ from shared.utils.email_templates import (
 router = APIRouter()
 
 # Initialize clients
-user_client = UserServiceClient(settings.USER_SERVICE_URL)
+# user_client is imported directly
 email_client = EmailClient(
     api_key=settings.SENDGRID_API_KEY,
     from_email=settings.SENDGRID_FROM_EMAIL,
@@ -38,14 +38,10 @@ email_client = EmailClient(
 async def get_booking_service(db: AsyncSession = Depends(get_db)) -> BookingService:
     return BookingService(db)
 
-# Dummy Auth Dependency (Replace with real JWT check)
-async def get_current_user_id() -> UUID:
-    # Hardcoded "Passenger" ID for testing
-    return UUID("550e8400-e29b-41d4-a716-446655440099") 
+from app.api.deps import get_current_user_id
 
-async def get_current_driver_id() -> UUID:
-    # Hardcoded "Driver" ID for testing (matches the one who owns the ride usually)
-    return UUID("550e8400-e29b-41d4-a716-446655440000")
+# Replaced dummy auth with real dependency
+
 
 @router.post("/", response_model=BookingResponse, status_code=status.HTTP_201_CREATED)
 async def create_booking(
@@ -77,7 +73,7 @@ async def approve_booking(
     booking_id: UUID,
     background_tasks: BackgroundTasks,
     service: BookingService = Depends(get_booking_service),
-    driver_id: UUID = Depends(get_current_driver_id)
+    driver_id: UUID = Depends(get_current_user_id)
 ):
     """
     Driver approves a pending booking.
@@ -98,7 +94,7 @@ async def reject_booking(
     booking_id: UUID,
     background_tasks: BackgroundTasks,
     service: BookingService = Depends(get_booking_service),
-    driver_id: UUID = Depends(get_current_driver_id)
+    driver_id: UUID = Depends(get_current_user_id)
 ):
     """
     Driver rejects a booking (Releases seats).
@@ -214,3 +210,75 @@ async def send_booking_rejected_email(booking):
     except Exception as e:
         import logging
         logging.error(f"Failed to send rejection email: {e}")
+
+@router.get("/my-bookings", response_model=List[BookingResponse])
+async def get_my_bookings(
+    skip: int = 0,
+    limit: int = 20,
+    current_user_id: str = Depends(get_current_user_id),
+    service: BookingService = Depends(get_booking_service)
+) -> Any:
+    """Get bookings made by the current user (Passenger)."""
+    return await service.get_bookings_by_passenger(UUID(current_user_id), skip=skip, limit=limit)
+
+@router.get("/driver-requests", response_model=List[BookingResponse])
+async def get_driver_requests(
+    skip: int = 0,
+    limit: int = 20,
+    current_user_id: str = Depends(get_current_user_id),
+    service: BookingService = Depends(get_booking_service)
+) -> Any:
+    """Get pending booking requests for the driver."""
+    return await service.get_driver_booking_requests(UUID(current_user_id), skip=skip, limit=limit)
+
+@router.put("/{booking_id}/cancel", response_model=BookingResponse)
+async def cancel_booking(
+    booking_id: UUID,
+    current_user_id: str = Depends(get_current_user_id),
+    service: BookingService = Depends(get_booking_service)
+) -> Any:
+    """Passenger cancels a booking."""
+    return await service.cancel_booking(booking_id, UUID(current_user_id))
+
+@router.put("/{booking_id}/driver-cancel", response_model=BookingResponse)
+async def cancel_booking_by_driver(
+    booking_id: UUID,
+    current_user_id: str = Depends(get_current_user_id),
+    service: BookingService = Depends(get_booking_service)
+) -> Any:
+    """Cancel a booking (Driver). Triggers refund if applicable."""
+    return await service.cancel_booking_by_driver(booking_id, UUID(current_user_id))
+
+@router.get("/{booking_id}/receipt", response_model=Any)
+async def get_booking_receipt(
+    booking_id: UUID,
+    current_user_id: str = Depends(get_current_user_id),
+    service: BookingService = Depends(get_booking_service)
+) -> Any:
+    """
+    Get payment receipt for a booking.
+    """
+    booking = await service.get_booking(booking_id)
+    
+    # Check authorization (passenger only? or driver too?)
+    if str(booking.passenger_id) != str(current_user_id):
+         # Drivers might want to see earnings, but receipt usually implies passenger charge.
+         # For MVP, restrict to passenger.
+         raise HTTPException(status_code=403, detail="Not authorized to view this receipt")
+
+    # Simple receipt object
+    return {
+        "receipt_id": f"RCPT-{str(booking.id)[:8]}",
+        "booking_id": booking.id,
+        "date": booking.created_at,
+        "amount": booking.total_amount,
+        "currency": "usd",
+        "status": "PAID" if booking.status == "completed" or booking.status == "approved" else booking.status,
+        "items": [
+            {
+                "description": "Ride Fare",
+                "amount": booking.total_amount
+            }
+        ],
+        "payment_method": "Stripe" # Placeholder
+    }

@@ -22,7 +22,8 @@ from app.schemas.notification import (
     NotificationPreferenceResponse,
     NotificationPreferenceUpdate,
     BookingNotificationData,
-    DriverTrackingData
+    DriverTrackingData,
+    PaymentNotificationData
 )
 from app.services.notification_service import NotificationService
 from app.models.notification import NotificationType
@@ -199,6 +200,33 @@ async def send_driver_arrived(
         passenger_email=passenger_email,
         passenger_fcm_token=passenger_fcm_token,
         data={'driver_name': data.driver_name}
+    )
+    return {"success": True, "notification_id": str(notification.id)}
+
+@router.post("/send/payment-confirmation", status_code=status.HTTP_201_CREATED)
+async def send_payment_confirmation(
+    data: PaymentNotificationData,
+    service: NotificationService = Depends(get_notification_service)
+):
+    """
+    Send payment confirmation.
+    Called by booking-service.
+    """
+    from app.clients.user_client import user_client
+    
+    # Fetch passenger details
+    passenger = await user_client.get_user(data.passenger_id)
+    passenger_email = passenger.get('email') if passenger else None
+    passenger_fcm_token = passenger.get('fcm_token') if passenger else None
+
+    notification = await service.send_payment_confirmation_notification(
+        passenger_id=data.passenger_id,
+        passenger_email=passenger_email,
+        passenger_fcm_token=passenger_fcm_token,
+        data={
+            'booking_id': str(data.booking_id),
+            'amount': data.amount
+        }
     )
     return {"success": True, "notification_id": str(notification.id)}
 
