@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #17a2b8; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background: #f9f9f9; padding: 20px; }
+        .reminder-box { background: #d1ecf1; border: 2px solid #17a2b8; padding: 15px; margin: 20px 0; border-radius: 5px; text-align: center; }
+        .ride-details { background: white; padding: 15px; margin: 20px 0; border-left: 4px solid #17a2b8; }
+        .checklist { background: white; padding: 15px; margin: 20px 0; }
+        .footer { background: #f5f5f5; padding: 15px; text-align: center; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 Ride Reminder</h1>
+        </div>
+
+        <div class="content">
+            <p>Hi {{ user_name }}!</p>
+
+            <div class="reminder-box">
+                <h2 style="margin-top: 0; color: #0c5460;">⏰ Your Ride is Tomorrow!</h2>
+                <p style="font-size: 18px; margin: 10px 0;">{{ departure_time }}</p>
+            </div>
+
+            <div class="ride-details">
+                <h3>📍 Ride Details</h3>
+                <p><strong>From:</strong> {{ origin }}</p>
+                <p><strong>To:</strong> {{ destination }}</p>
+                <p><strong>Time:</strong> {{ departure_time }}</p>
+                {% if is_driver %}
+                <p><strong>Passengers:</strong> {{ passenger_count }}</p>
+                {% else %}
+                <p><strong>Driver:</strong> {{ driver_name }}</p>
+                <p><strong>Seats Booked:</strong> {{ seats_booked }}</p>
+                {% endif %}
+            </div>
+
+            <div class="checklist">
+                <h3>✅ Pre-Trip Checklist</h3>
+                <ul>
+                    {% if is_driver %}
+                    <li>Check your vehicle's fuel and condition</li>
+                    <li>Review pickup locations for all passengers</li>
+                    <li>Have your phone charged for navigation</li>
+                    <li>Arrive on time at the pickup point</li>
+                    {% else %}
+                    <li>Be ready at the pickup location on time</li>
+                    <li>Have your phone charged</li>
+                    <li>Bring exact change if needed</li>
+                    <li>Contact your driver if you're running late</li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <p style="text-align: center; font-size: 16px; color: #17a2b8;">
+                <strong>Have a safe trip!</strong>
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>SJSU RideShare - Safe Carpooling for Students</p>
+            <p>Need to make changes? Open the app now</p>
+        </div>
+    </div>
+</body>
+</html>

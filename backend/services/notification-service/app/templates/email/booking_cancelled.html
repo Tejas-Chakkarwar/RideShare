@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #ffc107; color: #000; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background: #f9f9f9; padding: 20px; }
+        .warning-box { background: #fff3cd; border: 2px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px; }
+        .ride-details { background: white; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107; }
+        .footer { background: #f5f5f5; padding: 15px; text-align: center; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SJSU RideShare</h1>
+            <p>Booking Cancelled</p>
+        </div>
+
+        <div class="content">
+            <p>Hi {{ user_name }},</p>
+
+            <div class="warning-box">
+                <h3 style="margin-top: 0;">⚠️ Ride Cancelled</h3>
+                <p><strong>{{ cancelled_by }}</strong> has cancelled the booking.</p>
+            </div>
+
+            <div class="ride-details">
+                <h3>📍 Cancelled Ride Details</h3>
+                <p><strong>Route:</strong> {{ origin }} → {{ destination }}</p>
+                <p><strong>Time:</strong> {{ departure_time }}</p>
+                <p><strong>Seats:</strong> {{ seats_booked }}</p>
+                {% if total_amount %}
+                <p><strong>Refund Amount:</strong> ${{ total_amount }}</p>
+                {% endif %}
+            </div>
+
+            {% if refund_info %}
+            <p><strong>Refund Information:</strong></p>
+            <p>{{ refund_info }}</p>
+            {% endif %}
+
+            <p><strong>What's next?</strong></p>
+            <ul>
+                <li>Search for alternative rides on the same route</li>
+                <li>Browse other available rides in your area</li>
+                <li>Contact support if you need assistance</li>
+            </ul>
+
+            <p>We apologize for any inconvenience caused.</p>
+        </div>
+
+        <div class="footer">
+            <p>SJSU RideShare - Safe Carpooling for Students</p>
+            <p>Need help? Contact support@sjsurideshare.com</p>
+        </div>
+    </div>
+</body>
+</html>

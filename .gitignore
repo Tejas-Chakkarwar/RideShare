@@ -55,11 +55,13 @@ pgadmin_data/
 *.db
 *.sqlite
 
-# Learning Documentation (keep local)
-docs/learning/*.md
-!docs/learning/.gitkeep
+# Learning# Documentation (keep learning materials)
+# docs/ (ke# Learning materials - keep these!
+# docs/learning/*.md
+# !docs/learning/.gitkeep
 
 # Pytest
 .pytest_cache/
 .coverage
 htmlcov/
+backend/services/notification-service/app/firebase_credentials.json
