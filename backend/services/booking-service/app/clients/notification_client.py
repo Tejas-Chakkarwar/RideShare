@@ -121,4 +121,18 @@ class NotificationClient:
         }
         return await self._send_event("booking-rejected", data)
 
+    async def send_payment_confirmation(
+        self,
+        passenger_id: UUID,
+        booking_id: UUID,
+        amount: float
+    ):
+        """Send payment confirmation notification"""
+        data = {
+            "passenger_id": str(passenger_id),
+            "booking_id": str(booking_id),
+            "amount": amount
+        }
+        return await self._send_event("payment-confirmation", data)
+
 notification_client = NotificationClient()

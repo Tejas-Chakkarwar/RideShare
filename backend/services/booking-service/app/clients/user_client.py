@@ -52,5 +52,25 @@ class UserClient:
             logger.error(f"Error connecting to user service: {e}")
             return None
 
+    async def update_stripe_customer_id(self, user_id: UUID, customer_id: str) -> bool:
+        """
+        Update user's Stripe Customer ID
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.put(
+                    f"{self.base_url}/api/v1/users/{str(user_id)}/stripe-customer",
+                    json={"customer_id": customer_id}
+                )
+                
+                if response.status_code == 200:
+                    return True
+                else:
+                    logger.error(f"Failed to update Stripe ID for {user_id}: {response.status_code}")
+                    return False
+        except Exception as e:
+            logger.error(f"Error updating Stripe ID: {e}")
+            return False
+
 # Global client instance
 user_client = UserClient()
