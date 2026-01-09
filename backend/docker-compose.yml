@@ -81,6 +81,36 @@ services:
       - rideshare-network
 
 
+  # Tracking Service
+  tracking-service:
+    build:
+      context: .
+      dockerfile: services/tracking-service/Dockerfile
+    container_name: sjsu-tracking-service
+    ports:
+      - "8005:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - RIDE_SERVICE_URL=http://ride-service:8000
+      - BOOKING_SERVICE_URL=http://booking-service:8000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8000
+      - SECRET_KEY=dev_secret_key_change_in_production
+      - DEBUG=True
+    volumes:
+      - ./services/tracking-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ride-service:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - rideshare-network
+
+
 
   # PostgreSQL Database
   postgres:
