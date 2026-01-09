@@ -35,7 +35,8 @@ async def get_current_user(
             detail="Could not validate credentials",
         )
         
-    query = select(User).where(User.id == int(token_data.sub))
+    from uuid import UUID
+    query = select(User).where(User.id == UUID(token_data.sub))
     result = await db.execute(query)
     user = result.scalar_one_or_none()
     

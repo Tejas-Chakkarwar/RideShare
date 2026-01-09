@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 class Settings(BaseSettings):
     """
@@ -31,6 +31,12 @@ class Settings(BaseSettings):
         "http://localhost:3000",   # Frontend dev server
         "http://localhost:8081"    # React Native Metro bundler
     ]
+    
+    # Stripe
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_CONNECT_CLIENT_ID: Optional[str] = None
+    FRONTEND_URL: str = "http://localhost:3000"
     
     class Config:
         # Reads from .env file if available

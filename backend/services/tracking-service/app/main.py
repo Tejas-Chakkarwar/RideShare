@@ -6,6 +6,13 @@ from app.core.config import settings
 from app.core.redis_client import redis_client
 from app.api.routes import tracking
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+# Rate Limiter
+limiter = Limiter(key_func=get_remote_address)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -19,6 +26,9 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Set all CORS enabled origins
 if settings.BACKEND_CORS_ORIGINS:

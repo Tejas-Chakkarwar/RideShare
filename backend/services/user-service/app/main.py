@@ -5,6 +5,10 @@ import logging
 from app.core.config import settings
 from app.api.routes import health
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 # 1. Setup Logging
 # Logging is crucial for debugging in production
 logging.basicConfig(
@@ -12,6 +16,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Rate Limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # 2. Initialize FastAPI Application
 app = FastAPI(
@@ -21,6 +28,9 @@ app = FastAPI(
     docs_url="/docs",  # Swagger UI
     redoc_url="/redoc" # ReDoc UI
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # 3. Configure CORS Middleware
 # This allows our frontend (running on a different port) to communicate with this backend
@@ -42,9 +52,10 @@ app.add_exception_handler(Exception, global_exception_handler)
 # 4. Include Routers
 # We organize routes into separate modules
 app.include_router(health.router, tags=["Health"])
-from app.api.routes import auth, users
+from app.api.routes import auth, users, stripe_connect
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Authentication"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])
+app.include_router(stripe_connect.router, prefix=f"{settings.API_V1_PREFIX}/driver", tags=["Driver Payouts"])
 
 # 5. Startup Event
 @app.on_event("startup")
@@ -54,3 +65,13 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info(f"Shutting down {settings.SERVICE_NAME}...")
+
+# Mount uploads directory for static file serving
+import os
+from fastapi.staticfiles import StaticFiles
+
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")

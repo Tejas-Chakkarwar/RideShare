@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # Service Communication
     RIDE_SERVICE_URL: str
     USER_SERVICE_URL: str
+    NOTIFICATION_SERVICE_URL: str = "http://localhost:8004"
 
     # Auth
     SECRET_KEY: str
@@ -26,6 +27,17 @@ class Settings(BaseSettings):
 
     # App URL for email links
     APP_URL: str = "http://localhost:3000"
+
+    # CORS
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:8081"
+    ]
+
+    # Stripe
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
 
     class Config:
         env_file = ".env"

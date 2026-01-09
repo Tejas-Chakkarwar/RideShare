@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     APP_URL: str = "https://app.sjsurideshare.com"
     WEB_URL: str = "https://sjsurideshare.com"
 
+    # CORS
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:8081"
+    ]
+
     # Notification Settings
     MAX_RETRY_ATTEMPTS: int = 3
     RETRY_DELAY_SECONDS: int = 60
