@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from typing import List
+from typing import List, Any
 import asyncio
 import sys
 import os
@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.schemas.booking import BookingCreate, BookingResponse, BookingUpdateStatus
 from app.services.booking_service import BookingService
 from app.clients.user_client import user_client
-from app.main import limiter
+from app.core.limiter import limiter
 from shared.utils.email_client import EmailClient
 from shared.utils.email_templates import (
     render_booking_created_passenger,
@@ -68,21 +68,21 @@ async def create_booking(
 async def get_my_bookings(
     skip: int = 0,
     limit: int = 20,
-    current_user_id: str = Depends(get_current_user_id),
+    current_user_id: UUID = Depends(get_current_user_id),
     service: BookingService = Depends(get_booking_service)
 ):
     """Get bookings made by the current user (Passenger)."""
-    return await service.get_bookings_by_passenger(UUID(current_user_id), skip=skip, limit=limit)
+    return await service.get_bookings_by_passenger(current_user_id, skip=skip, limit=limit)
 
 @router.get("/driver-requests", response_model=List[BookingResponse])
 async def get_driver_requests(
     skip: int = 0,
     limit: int = 20,
-    current_user_id: str = Depends(get_current_user_id),
+    current_user_id: UUID = Depends(get_current_user_id),
     service: BookingService = Depends(get_booking_service)
 ):
     """Get pending booking requests for the driver."""
-    return await service.get_driver_booking_requests(UUID(current_user_id), skip=skip, limit=limit)
+    return await service.get_driver_booking_requests(current_user_id, skip=skip, limit=limit)
 
 @router.get("/{booking_id}", response_model=BookingResponse)
 async def get_booking(
@@ -237,51 +237,63 @@ async def send_booking_rejected_email(booking):
 @router.put("/{booking_id}/cancel", response_model=BookingResponse)
 async def cancel_booking(
     booking_id: UUID,
-    current_user_id: str = Depends(get_current_user_id),
+    current_user_id: UUID = Depends(get_current_user_id),
     service: BookingService = Depends(get_booking_service)
 ) -> Any:
     """Passenger cancels a booking."""
-    return await service.cancel_booking(booking_id, UUID(current_user_id))
+    return await service.cancel_booking(booking_id, current_user_id)
 
 @router.put("/{booking_id}/driver-cancel", response_model=BookingResponse)
 async def cancel_booking_by_driver(
     booking_id: UUID,
-    current_user_id: str = Depends(get_current_user_id),
+    current_user_id: UUID = Depends(get_current_user_id),
     service: BookingService = Depends(get_booking_service)
 ) -> Any:
     """Cancel a booking (Driver). Triggers refund if applicable."""
-    return await service.cancel_booking_by_driver(booking_id, UUID(current_user_id))
+    return await service.cancel_booking_by_driver(booking_id, current_user_id)
 
-@router.get("/{booking_id}/receipt", response_model=Any)
+@router.post("/{booking_id}/complete", response_model=BookingResponse)
+async def complete_booking(
+    booking_id: UUID,
+    service: BookingService = Depends(get_booking_service),
+    driver_id: UUID = Depends(get_current_user_id)
+) -> Any:
+    """Complete a booking (Driver). Required for rating."""
+    return await service.complete_booking(booking_id, driver_id)
+
+@router.get("/{booking_id}/receipt")
 async def get_booking_receipt(
     booking_id: UUID,
-    current_user_id: str = Depends(get_current_user_id),
+    current_user_id: UUID = Depends(get_current_user_id),
     service: BookingService = Depends(get_booking_service)
-) -> Any:
+):
     """
-    Get payment receipt for a booking.
+    Get payment receipt for a booking as PDF.
     """
     booking = await service.get_booking(booking_id)
     
     # Check authorization (passenger only? or driver too?)
     if str(booking.passenger_id) != str(current_user_id):
-         # Drivers might want to see earnings, but receipt usually implies passenger charge.
-         # For MVP, restrict to passenger.
+         # Drivers might want to see earnings? For now restriction is fine.
          raise HTTPException(status_code=403, detail="Not authorized to view this receipt")
 
-    # Simple receipt object
-    return {
-        "receipt_id": f"RCPT-{str(booking.id)[:8]}",
-        "booking_id": booking.id,
-        "date": booking.created_at,
-        "amount": booking.total_amount,
-        "currency": "usd",
-        "status": "PAID" if booking.status == "completed" or booking.status == "approved" else booking.status,
-        "items": [
-            {
-                "description": "Ride Fare",
-                "amount": booking.total_amount
-            }
-        ],
-        "payment_method": "Stripe" # Placeholder
+    # Serialize booking data for PDF
+    receipt_data = {
+        "booking_id": str(booking.id),
+        "ride_id": str(booking.ride_id),
+        "amount": f"{booking.total_amount:.2f}",
+        "currency": "USD",
+        "date": booking.created_at.strftime("%Y-%m-%d %H:%M"),
+        "pickup_address": booking.pickup_location.get("address", "N/A"),
+        "dropoff_address": booking.dropoff_location.get("address", "N/A"),
+        "status": booking.status,
+        "passenger_name": "Valued Customer" # Modify if Name available
     }
+    
+    from app.utils.pdf_generator import generate_receipt_pdf
+    pdf_bytes = generate_receipt_pdf(receipt_data)
+    
+    from fastapi.responses import Response
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={
+        "Content-Disposition": f"attachment; filename=receipt_{booking.id}.pdf"
+    })

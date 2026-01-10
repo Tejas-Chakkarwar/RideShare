@@ -72,5 +72,39 @@ class UserClient:
             logger.error(f"Error updating Stripe ID: {e}")
             return False
 
+    async def update_rating_stats(
+        self, 
+        user_id: UUID, 
+        rating_type: str, 
+        average_rating: float, 
+        total_ratings: int
+    ) -> bool:
+        """
+        Update user's rating statistics in user-service.
+        rating_type: "driver" or "passenger"
+        """
+        try:
+            payload = {
+                "rating_type": rating_type,
+                "average_rating": float(average_rating),
+                "total_ratings": total_ratings
+            }
+            
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.put(
+                    f"{self.base_url}/api/v1/users/{str(user_id)}/rating-stats",
+                    json=payload
+                )
+                
+                if response.status_code == 200:
+                    return True
+                else:
+                    logger.error(f"Failed to update rating stats for {user_id}: {response.status_code} - {response.text}")
+                    return False
+        except Exception as e:
+            logger.error(f"Error updating rating stats: {e}")
+            return False
+
+
 # Global client instance
 user_client = UserClient()

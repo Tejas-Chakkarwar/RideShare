@@ -106,3 +106,9 @@ class DriverTrackingData(BaseModel):
     passenger_id: UUID
     driver_name: str
     eta_minutes: Optional[int] = None
+
+class PaymentNotificationData(BaseModel):
+    """Data for payment confirmation notifications"""
+    passenger_id: UUID
+    booking_id: UUID
+    amount: float

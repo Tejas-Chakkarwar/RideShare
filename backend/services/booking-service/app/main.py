@@ -13,16 +13,13 @@ from app.core.database import engine, Base
 from app.api.routes import bookings, payments, webhooks, ratings
 from shared.middleware.request_id import RequestIDMiddleware
 
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from app.core.limiter import limiter
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 # Setup logging
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
-
-# Rate Limiter
-limiter = Limiter(key_func=get_remote_address)
 
 # Startup/Shutdown logic
 @asynccontextmanager
@@ -65,9 +62,13 @@ app.add_middleware(
 app.add_middleware(RequestIDMiddleware)
 
 app.include_router(bookings.router, prefix=f"{settings.API_V1_PREFIX}/bookings", tags=["bookings"])
+
+from app.api.routes import dashboard
+app.include_router(dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard", tags=["dashboard"])
+
+app.include_router(ratings.router, prefix=f"{settings.API_V1_PREFIX}/ratings", tags=["ratings"])
 app.include_router(payments.router, prefix=f"{settings.API_V1_PREFIX}", tags=["payments"])
 app.include_router(webhooks.router, prefix=f"{settings.API_V1_PREFIX}/webhooks", tags=["webhooks"])
-app.include_router(ratings.router, prefix=f"{settings.API_V1_PREFIX}/ratings", tags=["ratings"])
 
 @app.get("/health")
 async def health_check():

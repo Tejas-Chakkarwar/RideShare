@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 import logging
 from uuid import UUID
+from typing import List
 from datetime import datetime
 
 from app.models.booking import Booking, BookingStatus
@@ -337,4 +338,26 @@ class BookingService:
         except Exception as e:
             logger.error(f"Failed to send cancellation notification: {e}")
 
+        return booking
+
+    async def complete_booking(self, booking_id: UUID, driver_id: UUID) -> Booking:
+        """Mark a booking as completed (Driver only)"""
+        booking = await self.get_booking(booking_id)
+        
+        # Verify driver owns the ride
+        ride_res = await self.db.execute(
+            text("SELECT driver_id FROM rides WHERE id = :ride_id"),
+            {"ride_id": booking.ride_id}
+        )
+        driver_id_db = ride_res.scalar_one_or_none()
+        
+        if not driver_id_db or str(driver_id_db) != str(driver_id):
+             raise HTTPException(status_code=403, detail="Not authorized to complete this booking")
+
+        if booking.status != BookingStatus.APPROVED:
+             raise HTTPException(status_code=400, detail="Booking must be approved to complete")
+
+        booking.status = BookingStatus.COMPLETED
+        await self.db.commit()
+        await self.db.refresh(booking)
         return booking

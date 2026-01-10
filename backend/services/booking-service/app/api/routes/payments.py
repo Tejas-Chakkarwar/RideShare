@@ -8,7 +8,7 @@ from app.core.database import get_db
 # In Booking Service, we use JWT validation from app/core/security.py usually.
 # Let's verify dependencies.
 from app.services.payment_service import payment_service
-from app.services.booking_service import booking_service
+from app.services.booking_service import BookingService
 from app.clients.ride_client import ride_client
 from app.clients.user_client import user_client
 from app.schemas.payment import (
@@ -25,21 +25,27 @@ from app.schemas.payment import (
 # Import auth dependency from standard location
 from app.api.deps import get_current_user_id
 
+from app.api.deps import get_current_user_id
+
 router = APIRouter()
+
+async def get_booking_service(db: AsyncSession = Depends(get_db)) -> BookingService:
+    return BookingService(db)
 
 @router.post("/bookings/{booking_id}/payment-intent", response_model=PaymentIntentResponse)
 async def create_payment_intent(
     booking_id: UUID,
     payment_method: PaymentMethodSchema,
     current_user_id: UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    booking_service: BookingService = Depends(get_booking_service)
 ):
     """
     Create payment intent for booking
     Called when booking is approved by driver or immediately?
     Usually immediately to hold funds.
     """
-    booking = await booking_service.get_booking(booking_id, db)
+    booking = await booking_service.get_booking(booking_id)
     
     if not booking:
         raise HTTPException(404, "Booking not found")
@@ -73,13 +79,14 @@ async def create_payment_intent(
 async def capture_payment(
     booking_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    booking_service: BookingService = Depends(get_booking_service)
 ):
     """
     Capture payment after ride completion
     Called by driver when marking ride as complete
     """
-    booking = await booking_service.get_booking(booking_id, db)
+    booking = await booking_service.get_booking(booking_id)
     
     if not booking:
         raise HTTPException(404, "Booking not found")
@@ -119,12 +126,13 @@ async def refund_payment(
     booking_id: UUID,
     refund_request: RefundRequest,
     current_user_id: UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    booking_service: BookingService = Depends(get_booking_service)
 ):
     """
     Process refund for cancelled booking
     """
-    booking = await booking_service.get_booking(booking_id, db)
+    booking = await booking_service.get_booking(booking_id)
     
     if not booking:
         raise HTTPException(404, "Booking not found")

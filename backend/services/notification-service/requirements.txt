@@ -24,3 +24,7 @@ python-dotenv==1.0.0
 
 # HTTP Client (for inter-service communication)
 httpx==0.25.2
+python-jose[cryptography]==3.3.0
+
+# Rate Limiting
+slowapi==0.1.9
