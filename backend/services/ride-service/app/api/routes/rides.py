@@ -26,7 +26,7 @@ async def create_ride(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=List[RideResponse])
+@router.get(\"/\", response_model=List[RideResponse])
 async def search_rides(
     search_params: RideSearchParams = Depends(),
     db: AsyncSession = Depends(get_db)
@@ -35,6 +35,26 @@ async def search_rides(
     Search for rides based on criteria.
     """
     return await ride_service.search_rides(search_params, db)
+
+@router.get("/my-rides", response_model=List[RideResponse])
+async def get_my_rides(
+    status: str = None,
+    skip: int = 0,
+    limit: int = 20,
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """Get rides created by current driver."""
+    return await ride_service.get_rides_by_driver(UUID(current_user_id), db, status, skip, limit)
+
+@router.get("/feed", response_model=List[RideResponse])
+async def get_ride_feed(
+    skip: int = 0,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """Get recent available rides."""
+    return await ride_service.get_available_rides(db, skip, limit)
 
 @router.get("/{ride_id}", response_model=RideResponse)
 async def get_ride(
@@ -93,17 +113,6 @@ async def complete_ride(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/my-rides", response_model=List[RideResponse])
-async def get_my_rides(
-    status: str = None,
-    skip: int = 0,
-    limit: int = 20,
-    current_user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """Get rides created by current driver."""
-    return await ride_service.get_rides_by_driver(UUID(current_user_id), db, status, skip, limit)
-
 @router.put("/{ride_id}", response_model=RideResponse)
 async def update_ride(
     ride_id: UUID,
@@ -129,11 +138,3 @@ async def delete_ride(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/feed", response_model=List[RideResponse])
-async def get_ride_feed(
-    skip: int = 0,
-    limit: int = 20,
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """Get recent available rides."""
-    return await ride_service.get_available_rides(db, skip, limit)

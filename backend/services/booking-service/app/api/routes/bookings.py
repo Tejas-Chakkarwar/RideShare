@@ -61,6 +61,26 @@ async def create_booking(
     
     return booking
 
+@router.get("/my-bookings", response_model=List[BookingResponse])
+async def get_my_bookings(
+    skip: int = 0,
+    limit: int = 20,
+    current_user_id: str = Depends(get_current_user_id),
+    service: BookingService = Depends(get_booking_service)
+):
+    """Get bookings made by the current user (Passenger)."""
+    return await service.get_bookings_by_passenger(UUID(current_user_id), skip=skip, limit=limit)
+
+@router.get("/driver-requests", response_model=List[BookingResponse])
+async def get_driver_requests(
+    skip: int = 0,
+    limit: int = 20,
+    current_user_id: str = Depends(get_current_user_id),
+    service: BookingService = Depends(get_booking_service)
+):
+    """Get pending booking requests for the driver."""
+    return await service.get_driver_booking_requests(UUID(current_user_id), skip=skip, limit=limit)
+
 @router.get("/{booking_id}", response_model=BookingResponse)
 async def get_booking(
     booking_id: UUID,
@@ -116,7 +136,7 @@ async def send_booking_created_emails(booking):
     """Send emails when booking is created (to passenger and driver)"""
     try:
         # Get passenger info
-        passenger = await user_client.get_user(int(str(booking.passenger_id).replace('-', '')[:8], 16) % 1000000)
+        passenger = await user_client.get_user(booking.passenger_id)
         passenger_email = passenger.get('email') if passenger else 'test@example.com'
         passenger_name = passenger.get('full_name', 'Passenger') if passenger else 'Passenger'
         
@@ -167,7 +187,7 @@ async def send_booking_created_emails(booking):
 async def send_booking_approved_email(booking):
     """Send email when booking is approved"""
     try:
-        passenger = await user_client.get_user(int(str(booking.passenger_id).replace('-', '')[:8], 16) % 1000000)
+        passenger = await user_client.get_user(booking.passenger_id)
         passenger_email = passenger.get('email') if passenger else 'test@example.com'
         passenger_name = passenger.get('full_name', 'Passenger') if passenger else 'Passenger'
         
@@ -192,7 +212,7 @@ async def send_booking_approved_email(booking):
 async def send_booking_rejected_email(booking):
     """Send email when booking is rejected"""
     try:
-        passenger = await user_client.get_user(int(str(booking.passenger_id).replace('-', '')[:8], 16) % 1000000)
+        passenger = await user_client.get_user(booking.passenger_id)
         passenger_email = passenger.get('email') if passenger else 'test@example.com'
         passenger_name = passenger.get('full_name', 'Passenger') if passenger else 'Passenger'
         
@@ -210,26 +230,6 @@ async def send_booking_rejected_email(booking):
     except Exception as e:
         import logging
         logging.error(f"Failed to send rejection email: {e}")
-
-@router.get("/my-bookings", response_model=List[BookingResponse])
-async def get_my_bookings(
-    skip: int = 0,
-    limit: int = 20,
-    current_user_id: str = Depends(get_current_user_id),
-    service: BookingService = Depends(get_booking_service)
-) -> Any:
-    """Get bookings made by the current user (Passenger)."""
-    return await service.get_bookings_by_passenger(UUID(current_user_id), skip=skip, limit=limit)
-
-@router.get("/driver-requests", response_model=List[BookingResponse])
-async def get_driver_requests(
-    skip: int = 0,
-    limit: int = 20,
-    current_user_id: str = Depends(get_current_user_id),
-    service: BookingService = Depends(get_booking_service)
-) -> Any:
-    """Get pending booking requests for the driver."""
-    return await service.get_driver_booking_requests(UUID(current_user_id), skip=skip, limit=limit)
 
 @router.put("/{booking_id}/cancel", response_model=BookingResponse)
 async def cancel_booking(
