@@ -2,10 +2,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from contextlib import asynccontextmanager
+import sys
+import os
+
+# Add parent directory to path for shared modules
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
 
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.routes import bookings, payments, webhooks, ratings
+from shared.middleware.request_id import RequestIDMiddleware
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -54,6 +60,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request ID tracking middleware
+app.add_middleware(RequestIDMiddleware)
 
 app.include_router(bookings.router, prefix=f"{settings.API_V1_PREFIX}/bookings", tags=["bookings"])
 app.include_router(payments.router, prefix=f"{settings.API_V1_PREFIX}", tags=["payments"])
