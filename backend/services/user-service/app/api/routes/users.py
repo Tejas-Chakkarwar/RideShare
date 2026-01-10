@@ -11,7 +11,13 @@ from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.core import security
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import (
+    UserCreate, UserResponse, UserUpdate, UserProfileUpdate,
+    UserPasswordUpdate, PhoneVerificationRequest, PhoneVerificationConfirm,
+    PasswordResetRequest, PasswordResetConfirm, AccountDeletionRequest
+)
+from app.services.profile_service import profile_service
+from app.services.verification_service import verification_service
 from app.main import limiter
 
 router = APIRouter()
@@ -20,8 +26,8 @@ router = APIRouter()
 @limiter.limit("3/minute")  # Max 3 registrations per minute
 async def create_user(
     request: Request,
-    db: AsyncSession = Depends(get_db),
     user_in: UserCreate,
+    db: AsyncSession = Depends(get_db),
 ) -> Any:
     """
     Create new user.
@@ -107,7 +113,7 @@ async def update_fcm_token(
 async def update_user_me(
     *,
     db: AsyncSession = Depends(get_db),
-    user_in: UserUpdate,
+    user_in: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
@@ -124,28 +130,22 @@ async def update_user_me(
                 detail="The user with this email already exists in the system.",
             )
     
-    # Update fields
-    if user_in.full_name is not None:
-        current_user.full_name = user_in.full_name
-    if user_in.phone_number is not None:
-        current_user.phone_number = user_in.phone_number
-    if user_in.email is not None:
-        current_user.email = user_in.email
-    
-    # Update driver fields
-    if user_in.car_model is not None:
-        current_user.car_model = user_in.car_model
-    if user_in.car_color is not None:
-        current_user.car_color = user_in.car_color
-    if user_in.license_plate is not None:
-        current_user.license_plate = user_in.license_plate
-        
-    db.add(current_user)
-    await db.commit()
-    await db.refresh(current_user)
-    return current_user
+    # Update profile fields via service
+    # Note: Service handles commit
+    updated_user = await profile_service.update_profile(current_user.id, user_in, db)
 
-from app.schemas.user import UserPasswordUpdate
+    # Handle email update manually if present (Service ignores email)
+    if user_in.email and user_in.email != current_user.email:
+         current_user.email = user_in.email
+         current_user.email_verified = False
+         db.add(current_user)
+         await db.commit()
+         await db.refresh(current_user)
+         return current_user
+         
+    return updated_user
+
+
 
 @router.put("/me/password", response_model=Any)
 async def update_password(
@@ -157,18 +157,10 @@ async def update_password(
     """
     Update own password.
     """
-    if not security.verify_password(password_in.old_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect password")
-        
-    if password_in.new_password == password_in.old_password:
-         raise HTTPException(status_code=400, detail="New password cannot be the same as old password")
-
-    current_user.hashed_password = security.get_password_hash(password_in.new_password)
-    
-    db.add(current_user)
-    await db.commit()
-    
-    return {"message": "Password updated successfully"}
+    """
+    Update own password.
+    """
+    return await profile_service.change_password(current_user.id, password_in, db)
 
 @router.put("/{user_id}/stripe-customer", status_code=status.HTTP_200_OK)
 async def update_stripe_customer(
@@ -188,6 +180,46 @@ async def update_stripe_customer(
         raise HTTPException(status_code=404, detail="User not found")
         
     user.stripe_customer_id = customer_id
+    db.add(user)
+    await db.commit()
+    
+    return {"success": True}
+
+@router.put("/{user_id}/rating-stats", status_code=status.HTTP_200_OK)
+async def update_rating_stats(
+    user_id: UUID,
+    payload: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Update User Rating Statistics (Internal Endpoint).
+    Called by Booking Service after a rating is submitted.
+    """
+    query = select(User).where(User.id == user_id)
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    rating_type = payload.get("rating_type")
+    average_rating = payload.get("average_rating")
+    total_ratings = payload.get("total_ratings")
+    
+    if rating_type == "driver":
+        user.average_rating_as_driver = average_rating
+        user.total_ratings_as_driver = total_ratings
+        
+        # Check for badges logic if needed, e.g. Top Rated Driver
+        if average_rating >= 4.8 and total_ratings >= 50:
+            user.is_top_rated_driver = True
+        else:
+            user.is_top_rated_driver = False
+            
+    elif rating_type == "passenger":
+        user.average_rating_as_passenger = average_rating
+        user.total_ratings_as_passenger = total_ratings
+    
     db.add(user)
     await db.commit()
     
@@ -319,3 +351,79 @@ async def get_verification_status(
         "verification_status": verification_status
     }
 
+
+@router.post("/me/verify-phone", status_code=status.HTTP_200_OK)
+async def request_phone_verification(
+    request: PhoneVerificationRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Request SMS verification code.
+    """
+    return await verification_service.send_phone_verification_code(
+        current_user.id,
+        request.phone_number,
+        db
+    )
+
+@router.post("/me/verify-phone/confirm", status_code=status.HTTP_200_OK)
+async def confirm_phone_verification(
+    request: PhoneVerificationConfirm,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Confirm SMS verification code.
+    """
+    return await verification_service.verify_phone_code(
+        current_user.id,
+        request.code,
+        db
+    )
+
+@router.post("/me/verify-email", status_code=status.HTTP_200_OK)
+async def request_email_verification(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Request email verification link.
+    """
+    return await verification_service.send_email_verification(current_user.id, db)
+
+@router.post("/verify-email/confirm", status_code=status.HTTP_200_OK)
+async def confirm_email_verification(
+    token: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Confirm email verification (token).
+    Public endpoint.
+    """
+    return await verification_service.confirm_email_verification(token, db)
+
+@router.post("/me/request-deletion", status_code=status.HTTP_200_OK)
+async def request_account_deletion(
+    request: AccountDeletionRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Request account deletion.
+    """
+    return await profile_service.request_account_deletion(
+        current_user.id,
+        request,
+        db
+    )
+
+@router.delete("/me/cancel-deletion", status_code=status.HTTP_200_OK)
+async def cancel_account_deletion(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Cancel pending account deletion.
+    """
+    return await profile_service.cancel_account_deletion(current_user.id, db)
