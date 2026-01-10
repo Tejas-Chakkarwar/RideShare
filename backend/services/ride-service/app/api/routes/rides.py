@@ -26,7 +26,7 @@ async def create_ride(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get(\"/\", response_model=List[RideResponse])
+@router.get("/", response_model=List[RideResponse])
 async def search_rides(
     search_params: RideSearchParams = Depends(),
     db: AsyncSession = Depends(get_db)
@@ -131,7 +131,7 @@ async def delete_ride(
     ride_id: UUID,
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
-) -> Any:
+) -> None:
     """Cancel a ride."""
     try:
         await ride_service.delete_ride(ride_id, UUID(current_user_id), db)

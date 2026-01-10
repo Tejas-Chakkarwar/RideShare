@@ -52,9 +52,10 @@ app.add_exception_handler(Exception, global_exception_handler)
 # 4. Include Routers
 # We organize routes into separate modules
 app.include_router(health.router, tags=["Health"])
-from app.api.routes import auth, users, stripe_connect
+from app.api.routes import auth, users, stripe_connect, saved_locations
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Authentication"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])
+app.include_router(saved_locations.router, prefix=f"{settings.API_V1_PREFIX}/users/me/saved-locations", tags=["Saved Locations"])
 app.include_router(stripe_connect.router, prefix=f"{settings.API_V1_PREFIX}/driver", tags=["Driver Payouts"])
 
 # 5. Startup Event

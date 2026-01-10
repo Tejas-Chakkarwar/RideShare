@@ -11,6 +11,7 @@ from app.db.base import Base
 # Import all models so Base has them registered
 from app.models import user  # noqa
 from app.models.document import Document  # noqa
+from app.models.saved_location import SavedLocation  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -31,7 +32,7 @@ target_metadata = Base.metadata
 def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table":
         # Only include the 'users' table and the default version table
-        if name in ["users", "alembic_version"]:
+        if name in ["users", "documents", "saved_locations", "alembic_version"]:
             return True
         return False
     return True

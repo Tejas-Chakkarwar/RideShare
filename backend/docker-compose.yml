@@ -13,6 +13,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=True
+      - SECRET_KEY=dev_secret_key_change_in_production
     env_file:
       - ./services/user-service/.env
     volumes:
@@ -39,6 +40,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
       - USER_SERVICE_URL=http://user-service:8000
       - DEBUG=True
+      - SECRET_KEY=dev_secret_key_change_in_production
     env_file:
       - ./services/ride-service/.env
     volumes:
@@ -66,6 +68,7 @@ services:
       - RIDE_SERVICE_URL=http://ride-service:8000
       - USER_SERVICE_URL=http://user-service:8000
       - DEBUG=True
+      - SECRET_KEY=dev_secret_key_change_in_production
     env_file:
       - ./services/booking-service/.env
     volumes:
@@ -95,6 +98,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=True
+      - SECRET_KEY=dev_secret_key_change_in_production
     env_file:
       - ./services/notification-service/.env
     volumes:
