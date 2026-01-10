@@ -58,8 +58,12 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(health.router, tags=["Health"])
+# Specific routers first to avoid path conflicts
+from app.api.routes import health, rides, matching, ride_templates, sjsu
+app.include_router(ride_templates.router, prefix=f"{settings.API_V1_PREFIX}/rides/templates", tags=["Ride Templates"])
 app.include_router(rides.router, prefix=f"{settings.API_V1_PREFIX}/rides", tags=["Rides"])
 app.include_router(matching.router, prefix=settings.API_V1_PREFIX + "/matching", tags=["Matching"])
+app.include_router(sjsu.router, prefix=f"{settings.API_V1_PREFIX}/sjsu", tags=["SJSU Campus"])
 
 if __name__ == "__main__":
     import uvicorn
