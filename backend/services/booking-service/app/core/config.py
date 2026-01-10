@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 
 class Settings(BaseSettings):
     # Service Info
@@ -39,7 +40,18 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
 
+    @model_validator(mode='after')
+    def validate_required_keys(self):
+        """Validate that required API keys are set in production"""
+        if not self.DEBUG:
+            if not self.STRIPE_SECRET_KEY:
+                raise ValueError("STRIPE_SECRET_KEY is required for production")
+            if not self.SENDGRID_API_KEY:
+                raise ValueError("SENDGRID_API_KEY is required for production email notifications")
+        return self
+
     class Config:
         env_file = ".env"
 
 settings = Settings()
+
