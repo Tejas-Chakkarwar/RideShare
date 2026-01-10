@@ -1,65 +1,61 @@
+"""
+Rating API Routes
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from uuid import UUID
-from typing import List, Any
-import logging
+from typing import List, Optional
 
 from app.core.database import get_db
-from app.models.rating import Rating
-from app.schemas.rating import RatingCreate, RatingResponse
-from app.api.deps import get_current_user_id # Reusing from bookings.py logic ideally
+from app.api.deps import get_current_user_id
+from app.schemas.rating import (
+    RatingCreate,
+    RatingUpdate,
+    RatingResponse,
+    UserRatingStats,
+    RatingType
+)
+from app.services.rating_service import rating_service
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+
 
 @router.post("/", response_model=RatingResponse, status_code=status.HTTP_201_CREATED)
 async def create_rating(
     rating_in: RatingCreate,
-    current_user_id: str = Depends(get_current_user_id),
+    current_user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
-) -> Any:
+):
     """
-    Submit a rating for a booking.
-    """
-    # Verify user is part of booking
-    # (Logic similar to BookingService but simplified here for brevity/speed)
-    # Check if rating already exists?
-    
-    # Simple direct insert for MVP
-    rating = Rating(
-        booking_id=rating_in.booking_id,
-        rater_id=UUID(current_user_id),
-        rated_user_id=rating_in.rated_user_id,
-        rating=rating_in.rating,
-        comment=rating_in.comment
-    )
-    db.add(rating)
-    try:
-        await db.commit()
-        await db.refresh(rating)
-        return rating
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail="Rating failed (likely duplicate)")
+    Create a rating for a completed ride.
 
-@router.get("/user/{user_id}", response_model=List[RatingResponse])
-async def get_user_ratings(
+    Business Rules:
+    - Can only rate after ride is completed
+    - One rating per user per booking
+    - Must have been part of the ride
+    """
+    return await rating_service.create_rating(rating_in, current_user_id, db)
+
+
+@router.put("/{rating_id}", response_model=RatingResponse)
+async def update_rating(
+    rating_id: UUID,
+    rating_update: RatingUpdate,
+    current_user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update a rating (only within 24 hours of creation).
+    """
+    return await rating_service.update_rating(rating_id, rating_update, current_user_id, db)
+
+
+@router.get("/users/{user_id}/stats", response_model=UserRatingStats)
+async def get_user_rating_stats(
     user_id: UUID,
     db: AsyncSession = Depends(get_db)
-) -> Any:
-    """Get all ratings for a user."""
-    query = select(Rating).where(Rating.rated_user_id == user_id).order_by(Rating.created_at.desc())
-    result = await db.execute(query)
-    return result.scalars().all()
-
-@router.get("/user/{user_id}/average")
-async def get_user_average_rating(
-    user_id: UUID,
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """Get average rating for a user."""
-    query = select(func.avg(Rating.rating)).where(Rating.rated_user_id == user_id)
-    result = await db.execute(query)
-    avg = result.scalar()
-    return {"average_rating": float(avg) if avg else 0.0}
+):
+    """
+    Get comprehensive rating statistics for a user.
+    """
+    return await rating_service.get_user_rating_stats(user_id, db)
