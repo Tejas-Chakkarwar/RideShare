@@ -1,5 +1,5 @@
 from typing import Any
-from fastapi import APIRouter, Body, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Body, Depends, HTTPException, status, UploadFile, File, Request
 import shutil
 import os
 from app.models.document import Document
@@ -12,12 +12,14 @@ from app.api.deps import get_current_user
 from app.core import security
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
+from app.main import limiter
 
 router = APIRouter()
 
 @router.post("/", response_model=UserResponse)
+@limiter.limit("3/minute")  # Max 3 registrations per minute
 async def create_user(
-    *,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user_in: UserCreate,
 ) -> Any:
@@ -195,7 +197,9 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/me/photo", response_model=DocumentResponse)
+@limiter.limit("10/minute")  # Max 10 uploads per minute
 async def upload_photo(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -223,7 +227,9 @@ async def upload_photo(
     return doc
 
 @router.post("/me/documents", response_model=DocumentResponse)
+@limiter.limit("10/minute")  # Max 10 document uploads per minute
 async def upload_document(
+    request: Request,
     document_type: str, 
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),

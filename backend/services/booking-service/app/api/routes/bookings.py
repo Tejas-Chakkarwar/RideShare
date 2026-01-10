@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from typing import List
@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.schemas.booking import BookingCreate, BookingResponse, BookingUpdateStatus
 from app.services.booking_service import BookingService
 from app.clients.user_client import user_client
+from app.main import limiter
 from shared.utils.email_client import EmailClient
 from shared.utils.email_templates import (
     render_booking_created_passenger,
@@ -44,7 +45,9 @@ from app.api.deps import get_current_user_id
 
 
 @router.post("/", response_model=BookingResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")  # Max 10 bookings per minute
 async def create_booking(
+    request: Request,
     booking_in: BookingCreate,
     background_tasks: BackgroundTasks,
     service: BookingService = Depends(get_booking_service),

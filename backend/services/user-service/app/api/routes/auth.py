@@ -1,6 +1,6 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -10,11 +10,14 @@ from app.core import security
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.user import Token
+from app.main import limiter
 
 router = APIRouter()
 
 @router.post("/login/access-token", response_model=Token)
+@limiter.limit("5/minute")  # Max 5 login attempts per minute
 async def login_access_token(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
