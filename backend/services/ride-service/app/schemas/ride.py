@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
@@ -114,4 +114,11 @@ class RideSearchParams(BaseModel):
     proximity_km: float = Field(5.0, ge=0.1, le=50.0)
     min_price: Optional[Decimal] = Field(None, ge=0)
     max_price: Optional[Decimal] = Field(None, ge=0)
-    sort_by: Optional[str] = Field("departure_time", pattern="^(departure_time|price_per_seat|created_at)$")
+    
+    # Advanced filters
+    min_driver_rating: Optional[float] = Field(None, ge=0.0, le=5.0)
+    driver_gender: Optional[str] = Field(None, pattern="^(male|female|other|prefer_not_to_say)$")
+    driver_id: Optional[UUID] = None
+    amenities: Optional[List[str]] = None
+    
+    sort_by: Optional[str] = Field("departure_time", pattern="^(departure_time|price_per_seat|created_at|driver_rating)$")

@@ -165,22 +165,46 @@ class RideService:
         """
         Search for rides. 
         """
+        from app.models.user import User  # Inline import to avoid circular dep if any
+
         query = select(Ride).where(
             Ride.status == RideStatus.ACTIVE,
             Ride.available_seats >= params.min_seats,
+            # For testing, we might want to relax time check or ensure test rides are future
             Ride.departure_time >= datetime.now(timezone.utc)
         )
         
+        # Determine if we need to join User table
+        should_join_user = params.min_driver_rating is not None or params.driver_gender is not None or params.sort_by == "driver_rating"
+        
+        if should_join_user:
+            query = query.join(User, Ride.driver_id == User.id)
+
         if params.min_price is not None:
              query = query.where(Ride.price_per_seat >= params.min_price)
         if params.max_price is not None:
              query = query.where(Ride.price_per_seat <= params.max_price)
+             
+        # Advanced Filters
+        if params.min_driver_rating is not None:
+             query = query.where(User.average_rating_as_driver >= params.min_driver_rating)
+             
+        if params.driver_gender is not None:
+             query = query.where(User.gender == params.driver_gender)
+        
+        if params.driver_id is not None:
+             query = query.where(Ride.driver_id == params.driver_id)
              
         # Sorting
         if params.sort_by == "price_per_seat":
              query = query.order_by(Ride.price_per_seat.asc())
         elif params.sort_by == "created_at":
              query = query.order_by(Ride.created_at.desc())
+        elif params.sort_by == "driver_rating":
+             # Need to ensure joined if not already
+             if not should_join_user:
+                 query = query.join(User, Ride.driver_id == User.id)
+             query = query.order_by(User.average_rating_as_driver.desc())
         else: # Default departure_time
              query = query.order_by(Ride.departure_time.asc())
         

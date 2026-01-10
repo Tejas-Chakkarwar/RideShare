@@ -31,4 +31,23 @@ class RideClient:
             logger.error(f"Error fetching ride {ride_id}: {e}")
             return None
 
+    async def get_rides_by_driver(self, driver_id: UUID) -> Optional[list]:
+        """
+        Fetch all rides for a specific driver
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                # Assuming /api/v1/rides support search params
+                # ride-service search endpoint logic is updated to accept driver_id
+                response = await client.get(f"{self.base_url}/api/v1/rides/", params={"driver_id": str(driver_id), "limit": 100})
+                
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logger.error(f"Failed to fetch rides for driver {driver_id}: {response.status_code} - {response.text}")
+                    return []
+        except Exception as e:
+            logger.error(f"Error fetching rides for driver {driver_id}: {e}")
+            return []
+
 ride_client = RideClient()
