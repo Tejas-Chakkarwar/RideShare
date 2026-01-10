@@ -83,6 +83,32 @@ services:
       - rideshare-network
 
 
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: sjsu-notification-service
+    ports:
+      - "8004:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/rideshare
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=True
+    env_file:
+      - ./services/notification-service/.env
+    volumes:
+      - ./services/notification-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - rideshare-network
+
   # Tracking Service
   tracking-service:
     build:
@@ -107,6 +133,8 @@ services:
       redis:
         condition: service_healthy
       ride-service:
+        condition: service_started
+      notification-service:
         condition: service_started
     restart: unless-stopped
     networks:
